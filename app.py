@@ -329,22 +329,29 @@ def save_booking_to_db(booking_data: dict):
     try:
         conn = get_db_connection()
         if not conn:
+            logging.error("💥 SAVE FAILED - No database connection")
             return False
 
         cursor = conn.cursor()
-        
+
         if 'booking_id' not in booking_data or not booking_data['booking_id']:
             booking_id = generate_booking_id(booking_data['guest_email'], booking_data['timestamp'])
             booking_data['booking_id'] = booking_id
         else:
             booking_id = booking_data['booking_id']
 
+        logging.info(f"💾 ATTEMPTING DB INSERT - Booking ID: {booking_id}")
+        logging.info(f"   Table: bookings")
+        logging.info(f"   Guest: {booking_data['guest_email']}")
+        logging.info(f"   Date: {booking_data.get('date')}, Time: {booking_data.get('tee_time')}")
+        logging.info(f"   Players: {booking_data['players']}, Status: {booking_data['status']}")
+
         cursor.execute("""
             INSERT INTO bookings (
                 booking_id, message_id, timestamp, guest_email, dates, date, tee_time,
                 players, total, status, note, club, club_name
             ) VALUES (
-                %(booking_id)s, %(message_id)s, %(timestamp)s, %(guest_email)s, %(dates)s, 
+                %(booking_id)s, %(message_id)s, %(timestamp)s, %(guest_email)s, %(dates)s,
                 %(date)s, %(tee_time)s, %(players)s, %(total)s, %(status)s, %(note)s,
                 %(club)s, %(club_name)s
             )
@@ -370,10 +377,13 @@ def save_booking_to_db(booking_data: dict):
 
         conn.commit()
         cursor.close()
+
+        logging.info(f"✅ DB INSERT SUCCESSFUL - Booking {booking_id} saved to bookings table")
         return booking_id
 
     except Exception as e:
-        logging.error(f"Failed to save booking: {e}")
+        logging.error(f"💥 DB INSERT FAILED - {e}")
+        logging.exception("Full traceback:")
         if conn:
             conn.rollback()
         return False
@@ -424,6 +434,7 @@ def update_booking_in_db(booking_id: str, updates: dict):
     try:
         conn = get_db_connection()
         if not conn:
+            logging.error("💥 UPDATE FAILED - No database connection")
             return False
 
         cursor = conn.cursor()
@@ -436,21 +447,35 @@ def update_booking_in_db(booking_id: str, updates: dict):
                 params[key] = value
 
         if not set_clauses:
+            logging.warning(f"⚠️  UPDATE SKIPPED - No valid fields to update for {booking_id}")
             return False
 
         set_clauses.append("updated_at = CURRENT_TIMESTAMP")
 
-        cursor.execute(f"""
+        logging.info(f"🔄 ATTEMPTING DB UPDATE - Booking ID: {booking_id}")
+        logging.info(f"   Table: bookings")
+        logging.info(f"   Updates: {updates}")
+
+        query = f"""
             UPDATE bookings SET {', '.join(set_clauses)}
             WHERE booking_id = %(booking_id)s
-        """, params)
+        """
+        cursor.execute(query, params)
 
+        rows_updated = cursor.rowcount
         conn.commit()
         cursor.close()
-        return cursor.rowcount > 0
+
+        if rows_updated > 0:
+            logging.info(f"✅ DB UPDATE SUCCESSFUL - {rows_updated} row(s) updated in bookings table")
+            return True
+        else:
+            logging.warning(f"⚠️  DB UPDATE - No rows matched booking_id {booking_id}")
+            return False
 
     except Exception as e:
-        logging.error(f"Database update failed: {e}")
+        logging.error(f"💥 DB UPDATE FAILED - {e}")
+        logging.exception("Full traceback:")
         if conn:
             conn.rollback()
         return False
