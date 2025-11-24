@@ -215,7 +215,7 @@ def init_database():
 def check_availability_db(dates: List[str], players: int, club: str = None) -> List[Dict]:
     """
     Check tee time availability from the database
-    Returns list of available slots
+    Returns list of available slots based on recurring weekly template
     """
     if club is None:
         club = DEFAULT_COURSE_ID
@@ -234,58 +234,80 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         for date_str in dates:
+            # Parse date and get day of week
+            try:
+                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                day_name = date_obj.strftime('%A')  # e.g., 'Monday'
+                day_name_upper = day_name.upper()    # e.g., 'MONDAY'
+
+                logging.info(f"📅 CHECKING - {date_str} ({day_name})")
+
+            except ValueError:
+                logging.warning(f"⚠️  INVALID DATE FORMAT - {date_str}")
+                continue
+
             # Check if date is blocked
             cursor.execute("""
                 SELECT reason FROM blocked_dates
-                WHERE club = %s AND date = %s
-            """, (club, date_str))
+                WHERE date = %s
+            """, (date_str,))
 
             blocked = cursor.fetchone()
             if blocked:
                 logging.info(f"🚫 DATE BLOCKED - {date_str}: {blocked.get('reason', 'No reason given')}")
                 continue
 
-            # Check day of week - no visitor bookings on Wed/Sat/Sun
-            try:
-                date_obj = datetime.strptime(date_str, '%Y-%m-%d')
-                day_name = date_obj.strftime('%A')
-                if date_obj.weekday() in [2, 5, 6]:  # Wed, Sat, Sun
-                    logging.info(f"🚫 DATE EXCLUDED - {date_str} ({day_name}): No visitor bookings on Wed/Sat/Sun")
-                    continue
-            except ValueError:
-                logging.warning(f"⚠️  INVALID DATE FORMAT - {date_str}")
+            # Check day of week restrictions
+            # Wednesday: No visitor bookings
+            # Saturday/Sunday: Limited visitor times
+            if date_obj.weekday() == 2:  # Wednesday
+                logging.info(f"🚫 DATE EXCLUDED - {date_str} ({day_name}): No visitor bookings on Wednesdays")
                 continue
 
-            # Query available tee times
+            # Query available tee times from recurring weekly template
+            logging.info(f"🔎 QUERYING - tee_sheet.tee_times for day_of_week = '{day_name_upper}'")
+
             cursor.execute("""
                 SELECT
-                    date::text as date,
-                    time,
-                    available_slots,
-                    COALESCE(green_fee, %s) as green_fee
-                FROM tee_times
-                WHERE club = %s
-                AND date = %s
+                    id,
+                    day_of_week,
+                    tee_time,
+                    period,
+                    max_players,
+                    is_available,
+                    notes
+                FROM tee_sheet.tee_times
+                WHERE day_of_week = %s
                 AND is_available = TRUE
-                AND available_slots >= %s
-                ORDER BY time ASC
-            """, (PER_PLAYER_FEE, club, date_str, players))
+                AND max_players >= %s
+                ORDER BY tee_time ASC
+            """, (day_name_upper, players))
 
             date_results = cursor.fetchall()
             slots_found = len(date_results)
 
+            logging.info(f"📊 QUERY RESULT - Found {slots_found} tee time template(s) for {day_name_upper}")
+
             if slots_found > 0:
                 logging.info(f"✅ AVAILABILITY - {date_str} ({day_name}): {slots_found} tee time(s) found")
                 for slot in date_results:
-                    logging.info(f"   • {slot['time']} - {slot['available_slots']} slots available - £{float(slot['green_fee']):.2f} per player")
+                    # Convert time object to string
+                    time_str = str(slot['tee_time'])
+                    if len(time_str) == 8:  # HH:MM:SS format
+                        time_str = time_str[:5]  # Convert to HH:MM
+
+                    available_slots = slot['max_players']
+
+                    logging.info(f"   • {time_str} ({slot['period']}) - {available_slots} slots - £{PER_PLAYER_FEE:.2f} per player")
+
                     results.append({
-                        'date': slot['date'],
-                        'time': slot['time'],
-                        'available_slots': slot['available_slots'],
-                        'green_fee': float(slot['green_fee'])
+                        'date': date_str,
+                        'time': time_str,
+                        'available_slots': available_slots,
+                        'green_fee': PER_PLAYER_FEE
                     })
             else:
-                logging.info(f"❌ NO AVAILABILITY - {date_str} ({day_name}): No tee times with {players}+ slots")
+                logging.info(f"❌ NO AVAILABILITY - {date_str} ({day_name}): No tee times found for {day_name_upper} with {players}+ slots")
 
         cursor.close()
 
@@ -294,6 +316,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
 
     except Exception as e:
         logging.error(f"❌ DATABASE ERROR - {e}")
+        logging.exception("Full traceback:")
         return []
     finally:
         if conn:
