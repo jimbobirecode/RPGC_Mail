@@ -576,7 +576,7 @@ def get_email_header():
                     <table class="email-container" align="center" width="800">
                         <tr>
                             <td class="header">
-                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/Royal-Portrush-Golf-Club-Logo.jpg" alt="Royal Portrush Golf Club" style="max-width: 120px; margin-bottom: 20px;" />
+                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/LOGO.png" alt="Royal Portrush Golf Club" style="max-width: 120px; margin-bottom: 20px;" />
                                 <h1>Royal Portrush Golf Club</h1>
                                 <p>Available Tee Times for Your Round</p>
                             </td>
