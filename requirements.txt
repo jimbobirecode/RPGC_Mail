@@ -6,3 +6,6 @@ gunicorn==21.2.0
 sendgrid==6.10.0
 psycopg2-binary==2.9.9
 python-dateutil==2.8.2
+
+# Note: If you get psycopg2 errors on Python 3.13, 
+# add a .python-version file with "3.11.4" to pin Python version
