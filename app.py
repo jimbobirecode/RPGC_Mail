@@ -219,63 +219,81 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
     """
     if club is None:
         club = DEFAULT_COURSE_ID
-    
+
+    logging.info(f"🔍 DATABASE QUERY - Club: {club}, Dates: {dates}, Players: {players}")
+
     conn = None
     results = []
-    
+
     try:
         conn = get_db_connection()
         if not conn:
+            logging.error("❌ DATABASE - No connection available")
             return []
-        
+
         cursor = conn.cursor(cursor_factory=RealDictCursor)
-        
+
         for date_str in dates:
             # Check if date is blocked
             cursor.execute("""
                 SELECT reason FROM blocked_dates
                 WHERE club = %s AND date = %s
             """, (club, date_str))
-            
-            if cursor.fetchone():
+
+            blocked = cursor.fetchone()
+            if blocked:
+                logging.info(f"🚫 DATE BLOCKED - {date_str}: {blocked.get('reason', 'No reason given')}")
                 continue
-            
+
             # Check day of week - no visitor bookings on Wed/Sat/Sun
             try:
                 date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+                day_name = date_obj.strftime('%A')
                 if date_obj.weekday() in [2, 5, 6]:  # Wed, Sat, Sun
+                    logging.info(f"🚫 DATE EXCLUDED - {date_str} ({day_name}): No visitor bookings on Wed/Sat/Sun")
                     continue
             except ValueError:
+                logging.warning(f"⚠️  INVALID DATE FORMAT - {date_str}")
                 continue
-            
+
             # Query available tee times
             cursor.execute("""
-                SELECT 
+                SELECT
                     date::text as date,
                     time,
                     available_slots,
                     COALESCE(green_fee, %s) as green_fee
                 FROM tee_times
-                WHERE club = %s 
+                WHERE club = %s
                 AND date = %s
                 AND is_available = TRUE
                 AND available_slots >= %s
                 ORDER BY time ASC
             """, (PER_PLAYER_FEE, club, date_str, players))
-            
-            for slot in cursor.fetchall():
-                results.append({
-                    'date': slot['date'],
-                    'time': slot['time'],
-                    'available_slots': slot['available_slots'],
-                    'green_fee': float(slot['green_fee'])
-                })
-        
+
+            date_results = cursor.fetchall()
+            slots_found = len(date_results)
+
+            if slots_found > 0:
+                logging.info(f"✅ AVAILABILITY - {date_str} ({day_name}): {slots_found} tee time(s) found")
+                for slot in date_results:
+                    logging.info(f"   • {slot['time']} - {slot['available_slots']} slots available - £{float(slot['green_fee']):.2f} per player")
+                    results.append({
+                        'date': slot['date'],
+                        'time': slot['time'],
+                        'available_slots': slot['available_slots'],
+                        'green_fee': float(slot['green_fee'])
+                    })
+            else:
+                logging.info(f"❌ NO AVAILABILITY - {date_str} ({day_name}): No tee times with {players}+ slots")
+
         cursor.close()
+
+        logging.info(f"📋 TOTAL RESULTS - {len(results)} available tee time(s) across all dates")
         return results
-        
+
     except Exception as e:
-        logging.error(f"Error checking availability: {e}")
+        logging.error(f"❌ DATABASE ERROR - {e}")
         return []
     finally:
         if conn:
@@ -510,7 +528,7 @@ def get_email_header():
                     <table class="email-container" align="center" width="800">
                         <tr>
                             <td class="header">
-                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/Royal_Portrush_Golf_Club_logo.svg.png" alt="Royal Portrush Golf Club" style="max-width: 120px; margin-bottom: 20px;" />
+                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/refs/heads/main/Royal-Portrush-Golf-Club-Logo.svg" alt="Royal Portrush Golf Club" style="max-width: 120px; margin-bottom: 20px;" />
                                 <h1>Royal Portrush Golf Club</h1>
                                 <p>Available Tee Times for Your Round</p>
                             </td>
@@ -862,21 +880,26 @@ def parse_email_simple(subject: str, body: str) -> Dict:
     """Parse email to extract dates and player count"""
     full_text = f"{subject}\n{body}".lower()
     result = {'players': 4, 'dates': []}
-    
+
     # Extract players
     player_match = re.search(r'(\d+)\s*(?:players?|people|golfers?)', full_text)
     if player_match:
         num = int(player_match.group(1))
         if 1 <= num <= 20:
             result['players'] = num
-    
+            logging.info(f"📊 PARSED - Players: {num}")
+        else:
+            logging.info(f"📊 PARSED - Players: {num} (out of range, using default 4)")
+    else:
+        logging.info(f"📊 PARSED - Players: 4 (default, none specified)")
+
     # Extract dates - multiple patterns
     date_patterns = [
         r'(\d{4}-\d{2}-\d{2})',  # ISO format
         r'(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})',  # DD/MM/YYYY
         r'((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:\s+\d{2,4})?)',
     ]
-    
+
     dates_found = []
     for pattern in date_patterns:
         for match in re.finditer(pattern, full_text, re.IGNORECASE):
@@ -887,7 +910,7 @@ def parse_email_simple(subject: str, body: str) -> Dict:
                     parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
                 else:
                     parsed_date = date_parser.parse(date_str, fuzzy=True, dayfirst=True, default=datetime.now().replace(day=1))
-                
+
                 # Only future dates
                 if parsed_date.date() >= datetime.now().date():
                     formatted = parsed_date.strftime('%Y-%m-%d')
@@ -895,8 +918,14 @@ def parse_email_simple(subject: str, body: str) -> Dict:
                         dates_found.append(formatted)
             except:
                 continue
-    
+
     result['dates'] = dates_found
+
+    if dates_found:
+        logging.info(f"📅 PARSED - Dates found: {', '.join(dates_found)}")
+    else:
+        logging.info(f"📅 PARSED - No dates found in email")
+
     return result
 
 
@@ -946,55 +975,71 @@ def handle_inbound_email():
         if is_staff_confirmation(subject, body, sender_email):
             logging.info("DETECTED: Staff Confirmation")
             booking_id = extract_booking_id(subject) or extract_booking_id(body)
-            
+
             if booking_id:
                 booking = get_booking_by_id(booking_id)
                 if booking and booking.get('status') == 'Requested':
                     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    logging.info(f"✅ CONFIRMING BOOKING - {booking_id}")
+                    logging.info(f"   Customer: {booking.get('guest_email')}")
+                    logging.info(f"   Date: {booking.get('date', 'TBD')}")
+                    logging.info(f"   Time: {booking.get('tee_time', 'TBD')}")
+                    logging.info(f"   Players: {booking.get('players', 'N/A')}")
+
                     update_booking_in_db(booking_id, {
                         'status': 'Confirmed',
                         'note': f"Booking confirmed by team on {timestamp}"
                     })
-                    
+
                     customer_email = booking.get('guest_email')
                     if customer_email:
+                        logging.info(f"📧 SENDING CONFIRMATION EMAIL - to {customer_email}")
                         html_email = format_confirmation_email(booking)
                         send_email_sendgrid(customer_email, "Booking Confirmed - Royal Portrush Golf Club", html_email)
-                    
+
                     return jsonify({'status': 'confirmed', 'booking_id': booking_id}), 200
-            
+
             return jsonify({'status': 'no_booking_id'}), 200
         
         # CASE 2: Booking Request
         elif is_booking_request(subject, body):
             logging.info("DETECTED: Booking Request")
             booking_id = extract_booking_id(subject) or extract_booking_id(body)
-            
+
             if booking_id:
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 updates = {
                     'status': 'Requested',
                     'note': f"Customer sent booking request on {timestamp}"
                 }
-                
+
                 # Extract date and time
                 date_match = re.search(r'(\d{4}-\d{2}-\d{2})', subject + body)
                 time_match = re.search(r'(\d{1,2}:\d{2})', subject + body)
-                
+
                 if date_match:
                     updates['date'] = date_match.group(1)
+                    logging.info(f"📅 EXTRACTED DATE - {date_match.group(1)}")
                 if time_match:
                     updates['tee_time'] = time_match.group(1)
-                
+                    logging.info(f"🕐 EXTRACTED TIME - {time_match.group(1)}")
+
+                logging.info(f"🔄 UPDATING BOOKING - {booking_id} to 'Requested' status")
                 update_booking_in_db(booking_id, updates)
-                
+
                 booking_data = get_booking_by_id(booking_id)
                 if booking_data:
+                    logging.info(f"📧 SENDING ACKNOWLEDGMENT - Booking {booking_id} to {sender_email}")
+                    logging.info(f"   Date: {booking_data.get('date', 'TBD')}")
+                    logging.info(f"   Time: {booking_data.get('tee_time', 'TBD')}")
+                    logging.info(f"   Players: {booking_data.get('players', 'N/A')}")
+                    logging.info(f"   Total: £{booking_data.get('total', 0):.2f}")
+
                     html_email = format_acknowledgment_email(booking_data)
                     send_email_sendgrid(sender_email, "Your Booking Request - Royal Portrush Golf Club", html_email)
-                
+
                 return jsonify({'status': 'requested', 'booking_id': booking_id}), 200
-            
+
             return jsonify({'status': 'no_booking_id'}), 200
         
         # CASE 3: New Inquiry
@@ -1002,7 +1047,7 @@ def handle_inbound_email():
             logging.info("DETECTED: New Inquiry")
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             booking_id = generate_booking_id(sender_email, timestamp)
-            
+
             new_entry = {
                 "booking_id": booking_id,
                 "timestamp": timestamp,
@@ -1018,25 +1063,38 @@ def handle_inbound_email():
                 "club": DEFAULT_COURSE_ID,
                 "club_name": FROM_NAME
             }
-            
+
+            logging.info(f"💾 SAVING BOOKING - ID: {booking_id}, Guest: {sender_email}, Players: {parsed['players']}, Total: £{new_entry['total']:.2f}")
+
             save_booking_to_db(new_entry)
-            
+
             # Check database for availability
             if parsed['dates']:
                 results = check_availability_db(parsed['dates'], parsed['players'], DEFAULT_COURSE_ID)
-                
+
                 if results:
+                    logging.info(f"📧 SENDING EMAIL - Available Tee Times ({len(results)} options) to {sender_email}")
+                    logging.info(f"   Booking ID: {booking_id}")
+                    logging.info(f"   Players: {parsed['players']}")
+                    logging.info(f"   Green Fee: £{PER_PLAYER_FEE:.2f} per player")
+                    logging.info(f"   Total: £{parsed['players'] * PER_PLAYER_FEE:.2f}")
+
                     html_email = format_inquiry_email(results, parsed['players'], sender_email, booking_id)
                     subject_line = "Available Tee Times at Royal Portrush Golf Club"
                 else:
+                    logging.info(f"📧 SENDING EMAIL - No Availability to {sender_email}")
+                    logging.info(f"   Requested: {', '.join(parsed['dates'])}")
+                    logging.info(f"   Players: {parsed['players']}")
+
                     html_email = format_no_availability_email(parsed['players'], parsed['dates'])
                     subject_line = "Tee Time Availability - Royal Portrush Golf Club"
             else:
+                logging.info(f"📧 SENDING EMAIL - No Dates Provided to {sender_email}")
                 html_email = format_no_availability_email(parsed['players'])
                 subject_line = "Tee Time Inquiry - Royal Portrush Golf Club"
-            
+
             send_email_sendgrid(sender_email, subject_line, html_email)
-            
+
             return jsonify({'status': 'inquiry_created', 'booking_id': booking_id}), 200
     
     except Exception as e:
