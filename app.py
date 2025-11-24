@@ -265,7 +265,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 continue
 
             # Query available tee times from recurring weekly template
-            logging.info(f"🔎 QUERYING - tee_sheet.tee_times for day_of_week = '{day_name_upper}'")
+            logging.info(f"🔎 QUERYING - tee_times for day_of_week = '{day_name_upper}'")
 
             cursor.execute("""
                 SELECT
@@ -276,7 +276,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                     max_players,
                     is_available,
                     notes
-                FROM tee_sheet.tee_times
+                FROM tee_times
                 WHERE day_of_week = %s
                 AND is_available = TRUE
                 AND max_players >= %s
