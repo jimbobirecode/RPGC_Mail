@@ -323,6 +323,57 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
             release_db_connection(conn)
 
 
+def find_alternative_dates(requested_dates: List[str], players: int, club: str = None, days_range: int = 2) -> List[Dict]:
+    """
+    Find alternative dates within ±days_range when requested dates aren't available
+    Returns list of available slots for nearby dates
+    """
+    if club is None:
+        club = DEFAULT_COURSE_ID
+
+    logging.info(f"🔄 SEARCHING ALTERNATIVES - ±{days_range} days from requested dates")
+
+    alternative_dates = []
+
+    for date_str in requested_dates:
+        try:
+            requested_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+            # Check 2 days before and 2 days after
+            for offset in range(-days_range, days_range + 1):
+                if offset == 0:  # Skip the originally requested date
+                    continue
+
+                alt_date = requested_date + timedelta(days=offset)
+                alt_date_str = alt_date.strftime('%Y-%m-%d')
+
+                # Don't suggest past dates
+                if alt_date.date() < datetime.now().date():
+                    continue
+
+                if alt_date_str not in alternative_dates:
+                    alternative_dates.append(alt_date_str)
+
+        except ValueError:
+            continue
+
+    # Remove duplicates and sort
+    alternative_dates = sorted(list(set(alternative_dates)))
+
+    if alternative_dates:
+        logging.info(f"📅 ALTERNATIVE DATES - Checking: {', '.join(alternative_dates)}")
+        results = check_availability_db(alternative_dates, players, club)
+
+        if results:
+            logging.info(f"✅ ALTERNATIVES FOUND - {len(results)} tee time(s) on nearby dates")
+        else:
+            logging.info(f"❌ NO ALTERNATIVES - No availability found on nearby dates")
+
+        return results
+
+    return []
+
+
 def save_booking_to_db(booking_data: dict):
     """Save booking to PostgreSQL"""
     conn = None
@@ -838,36 +889,93 @@ def format_confirmation_email(booking_data: Dict) -> str:
     return html
 
 
-def format_no_availability_email(player_count: int, dates: list = None) -> str:
-    """Generate email when no availability found"""
+def format_no_availability_email(player_count: int, dates: list = None, alternative_results: list = None, guest_email: str = None, booking_id: str = None) -> str:
+    """Generate email when no availability found, with alternative dates if available"""
     html = get_email_header()
-    
+
     html += f"""
         <p style="color: {ROYAL_PORTRUSH_COLORS['text_dark']}; font-size: 16px; line-height: 1.8;">
             Thank you for your enquiry at <strong>Royal Portrush Golf Club</strong>.
         </p>
-        
+
         <div style="background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 8px; padding: 20px; margin: 25px 0;">
             <h3 style="color: #dc2626; margin: 0 0 12px 0;">⚠️ No Availability Found</h3>
             <p style="margin: 0;">Unfortunately, we do not have availability for <strong>{player_count} player(s)</strong> on your requested dates.</p>
         </div>
-        
+    """
+
+    # If alternative dates found, show them
+    if alternative_results and len(alternative_results) > 0:
+        html += f"""
+        <div style="background: {ROYAL_PORTRUSH_COLORS['success_bg']}; border-left: 4px solid {ROYAL_PORTRUSH_COLORS['success_green']}; border-radius: 8px; padding: 20px; margin: 25px 0;">
+            <h3 style="color: {ROYAL_PORTRUSH_COLORS['success_green']}; margin: 0 0 15px 0;">✨ Alternative Dates Available</h3>
+            <p style="margin: 0 0 15px 0;">We found availability on nearby dates (within 2 days):</p>
+        </div>
+        """
+
+        # Group alternatives by date
+        alt_dates_list = sorted(list(set([r["date"] for r in alternative_results])))
+
+        for date in alt_dates_list:
+            date_results = [r for r in alternative_results if r["date"] == date]
+            if not date_results:
+                continue
+
+            formatted_date = format_date_display(date)
+
+            html += f"""
+            <div style="margin: 30px 0;">
+                <h2 style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-size: 18px; margin: 0 0 15px 0;">
+                    📅 {formatted_date}
+                </h2>
+                <table class="tee-table">
+                    <thead>
+                        <tr>
+                            <th>Tee Time</th>
+                            <th>Players</th>
+                            <th>Green Fee</th>
+                            <th style="text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+
+            for result in date_results[:8]:  # Limit to 8 times per date
+                time = result["time"]
+                green_fee = result.get("green_fee", PER_PLAYER_FEE)
+                booking_link = build_booking_link(date, time, player_count, guest_email, booking_id) if guest_email else "#"
+
+                html += f"""
+                    <tr>
+                        <td><strong style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']};">{time}</strong></td>
+                        <td>{player_count} players</td>
+                        <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{green_fee:.2f}</td>
+                        <td style="text-align: center;">
+                            <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                        </td>
+                    </tr>
+                """
+
+            html += "</tbody></table></div>"
+
+    # Always show suggestions and contact info
+    html += f"""
         <div class="info-box">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">💡 Suggestions</h3>
             <ul style="margin: 10px 0; padding-left: 20px; font-size: 14px; line-height: 1.8;">
-                <li>Try different dates (note: no visitor bookings on Wednesdays or weekends)</li>
+                <li>Try different dates (note: no visitor bookings on Wednesdays)</li>
                 <li>Consider a smaller group size</li>
-                <li>Contact us directly for alternative options</li>
+                <li>Contact us directly for more options</li>
             </ul>
         </div>
-        
+
         <div class="info-box">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">📞 Contact Us</h3>
             <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['burgundy']};">{CLUB_BOOKING_EMAIL}</a></p>
             <p style="margin: 5px 0;"><strong>Phone:</strong> +44 28 7082 2311</p>
         </div>
     """
-    
+
     html += get_email_footer()
     return html
 
@@ -1130,12 +1238,24 @@ def handle_inbound_email():
                     html_email = format_inquiry_email(results, parsed['players'], sender_email, booking_id)
                     subject_line = "Available Tee Times at Royal Portrush Golf Club"
                 else:
-                    logging.info(f"📧 SENDING EMAIL - No Availability to {sender_email}")
-                    logging.info(f"   Requested: {', '.join(parsed['dates'])}")
-                    logging.info(f"   Players: {parsed['players']}")
+                    # No availability on requested dates - search for alternatives
+                    alternative_results = find_alternative_dates(parsed['dates'], parsed['players'], DEFAULT_COURSE_ID, days_range=2)
 
-                    html_email = format_no_availability_email(parsed['players'], parsed['dates'])
-                    subject_line = "Tee Time Availability - Royal Portrush Golf Club"
+                    if alternative_results:
+                        logging.info(f"📧 SENDING EMAIL - No Availability on Requested Dates, but {len(alternative_results)} Alternative(s) Found")
+                        logging.info(f"   Requested: {', '.join(parsed['dates'])}")
+                        logging.info(f"   Players: {parsed['players']}")
+                        logging.info(f"   Alternatives: {len(set([r['date'] for r in alternative_results]))} nearby date(s)")
+
+                        html_email = format_no_availability_email(parsed['players'], parsed['dates'], alternative_results, sender_email, booking_id)
+                        subject_line = "Alternative Tee Times Available - Royal Portrush Golf Club"
+                    else:
+                        logging.info(f"📧 SENDING EMAIL - No Availability (including alternatives) to {sender_email}")
+                        logging.info(f"   Requested: {', '.join(parsed['dates'])}")
+                        logging.info(f"   Players: {parsed['players']}")
+
+                        html_email = format_no_availability_email(parsed['players'], parsed['dates'])
+                        subject_line = "Tee Time Availability - Royal Portrush Golf Club"
             else:
                 logging.info(f"📧 SENDING EMAIL - No Dates Provided to {sender_email}")
                 html_email = format_no_availability_email(parsed['players'])
