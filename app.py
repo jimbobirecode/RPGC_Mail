@@ -212,10 +212,89 @@ def init_database():
             release_db_connection(conn)
 
 
+def find_grouped_tee_times(all_slots: List[Dict], players: int, max_gap_minutes: int = 20) -> List[Dict]:
+    """
+    Group consecutive tee times together for larger parties.
+
+    Args:
+        all_slots: List of individual tee time slots
+        players: Total number of players needed
+        max_gap_minutes: Maximum gap between consecutive times (default 20 minutes)
+
+    Returns:
+        List of grouped tee time options that can accommodate the full group
+    """
+    if players <= 4:
+        return all_slots  # No grouping needed for 4 or fewer players
+
+    logging.info(f"👥 GROUPING TEE TIMES - Need {players} players, searching for combinations")
+
+    grouped_results = []
+
+    # Group slots by date
+    dates = sorted(list(set([slot['date'] for slot in all_slots])))
+
+    for date in dates:
+        date_slots = [s for s in all_slots if s['date'] == date]
+        date_slots.sort(key=lambda x: x['time'])
+
+        # Try to find combinations of consecutive times
+        i = 0
+        while i < len(date_slots):
+            combination = []
+            total_capacity = 0
+            current_slot = date_slots[i]
+
+            # Start building a combination
+            combination.append(current_slot)
+            total_capacity += current_slot['available_slots']
+
+            # Look ahead for consecutive times
+            j = i + 1
+            while j < len(date_slots) and total_capacity < players:
+                next_slot = date_slots[j]
+
+                # Calculate time gap
+                current_time = datetime.strptime(current_slot['time'], '%H:%M')
+                next_time = datetime.strptime(next_slot['time'], '%H:%M')
+                gap_minutes = (next_time - current_time).total_seconds() / 60
+
+                if gap_minutes <= max_gap_minutes:
+                    combination.append(next_slot)
+                    total_capacity += next_slot['available_slots']
+                    current_slot = next_slot
+                    j += 1
+                else:
+                    break
+
+            # If this combination can fit the group, add it
+            if total_capacity >= players:
+                times = [s['time'] for s in combination]
+                num_groups = len(combination)
+
+                logging.info(f"   ✓ Found combination: {' & '.join(times)} = {total_capacity} slots ({num_groups} groups)")
+
+                grouped_results.append({
+                    'date': date,
+                    'time': times[0],  # Primary time
+                    'grouped_times': times,  # All times in the group
+                    'available_slots': total_capacity,
+                    'green_fee': PER_PLAYER_FEE,
+                    'num_groups': num_groups,
+                    'is_grouped': True
+                })
+
+            i += 1
+
+    logging.info(f"📊 GROUPING RESULT - Found {len(grouped_results)} grouped tee time option(s)")
+    return grouped_results
+
+
 def check_availability_db(dates: List[str], players: int, club: str = None) -> List[Dict]:
     """
     Check tee time availability from the database
     Returns list of available slots based on recurring weekly template
+    For groups > 4, automatically finds grouped consecutive tee times
     """
     if club is None:
         club = DEFAULT_COURSE_ID
@@ -223,7 +302,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
     logging.info(f"🔍 DATABASE QUERY - Club: {club}, Dates: {dates}, Players: {players}")
 
     conn = None
-    results = []
+    all_slots = []
 
     try:
         conn = get_db_connection()
@@ -258,13 +337,11 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 continue
 
             # Check day of week restrictions
-            # Wednesday: No visitor bookings
-            # Saturday/Sunday: Limited visitor times
             if date_obj.weekday() == 2:  # Wednesday
                 logging.info(f"🚫 DATE EXCLUDED - {date_str} ({day_name}): No visitor bookings on Wednesdays")
                 continue
 
-            # Query available tee times from recurring weekly template
+            # Query available tee times - get ALL available times (not filtered by players for grouping)
             logging.info(f"🔎 QUERYING - tee_times for day_of_week = '{day_name_upper}'")
 
             cursor.execute("""
@@ -279,9 +356,8 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 FROM tee_times
                 WHERE day_of_week = %s
                 AND is_available = TRUE
-                AND max_players >= %s
                 ORDER BY tee_time ASC
-            """, (day_name_upper, players))
+            """, (day_name_upper,))
 
             date_results = cursor.fetchall()
             slots_found = len(date_results)
@@ -289,7 +365,6 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
             logging.info(f"📊 QUERY RESULT - Found {slots_found} tee time template(s) for {day_name_upper}")
 
             if slots_found > 0:
-                logging.info(f"✅ AVAILABILITY - {date_str} ({day_name}): {slots_found} tee time(s) found")
                 for slot in date_results:
                     # Convert time object to string
                     time_str = str(slot['tee_time'])
@@ -298,18 +373,27 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
 
                     available_slots = slot['max_players']
 
-                    logging.info(f"   • {time_str} ({slot['period']}) - {available_slots} slots - £{PER_PLAYER_FEE:.2f} per player")
-
-                    results.append({
+                    all_slots.append({
                         'date': date_str,
                         'time': time_str,
                         'available_slots': available_slots,
-                        'green_fee': PER_PLAYER_FEE
+                        'green_fee': PER_PLAYER_FEE,
+                        'is_grouped': False
                     })
-            else:
-                logging.info(f"❌ NO AVAILABILITY - {date_str} ({day_name}): No tee times found for {day_name_upper} with {players}+ slots")
 
         cursor.close()
+
+        # If group size > 4, find grouped tee times
+        if players > 4:
+            results = find_grouped_tee_times(all_slots, players, max_gap_minutes=20)
+        else:
+            # For 4 or fewer, just filter slots that can accommodate
+            results = [s for s in all_slots if s['available_slots'] >= players]
+
+            if results:
+                logging.info(f"✅ AVAILABILITY - {len(results)} tee time(s) found for {players} player(s)")
+                for result in results[:5]:  # Log first 5
+                    logging.info(f"   • {result['time']} - {result['available_slots']} slots - £{PER_PLAYER_FEE:.2f} per player")
 
         logging.info(f"📋 TOTAL RESULTS - {len(results)} available tee time(s) across all dates")
         return results
@@ -321,6 +405,57 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
     finally:
         if conn:
             release_db_connection(conn)
+
+
+def find_alternative_dates(requested_dates: List[str], players: int, club: str = None, days_range: int = 2) -> List[Dict]:
+    """
+    Find alternative dates within ±days_range when requested dates aren't available
+    Returns list of available slots for nearby dates
+    """
+    if club is None:
+        club = DEFAULT_COURSE_ID
+
+    logging.info(f"🔄 SEARCHING ALTERNATIVES - ±{days_range} days from requested dates")
+
+    alternative_dates = []
+
+    for date_str in requested_dates:
+        try:
+            requested_date = datetime.strptime(date_str, '%Y-%m-%d')
+
+            # Check 2 days before and 2 days after
+            for offset in range(-days_range, days_range + 1):
+                if offset == 0:  # Skip the originally requested date
+                    continue
+
+                alt_date = requested_date + timedelta(days=offset)
+                alt_date_str = alt_date.strftime('%Y-%m-%d')
+
+                # Don't suggest past dates
+                if alt_date.date() < datetime.now().date():
+                    continue
+
+                if alt_date_str not in alternative_dates:
+                    alternative_dates.append(alt_date_str)
+
+        except ValueError:
+            continue
+
+    # Remove duplicates and sort
+    alternative_dates = sorted(list(set(alternative_dates)))
+
+    if alternative_dates:
+        logging.info(f"📅 ALTERNATIVE DATES - Checking: {', '.join(alternative_dates)}")
+        results = check_availability_db(alternative_dates, players, club)
+
+        if results:
+            logging.info(f"✅ ALTERNATIVES FOUND - {len(results)} tee time(s) on nearby dates")
+        else:
+            logging.info(f"❌ NO ALTERNATIVES - No availability found on nearby dates")
+
+        return results
+
+    return []
 
 
 def save_booking_to_db(booking_data: dict):
@@ -615,27 +750,37 @@ def get_email_footer():
     """
 
 
-def build_booking_link(date: str, time: str, players: int, guest_email: str, booking_id: str = None) -> str:
+def build_booking_link(date: str, time: str, players: int, guest_email: str, booking_id: str = None, grouped_times: List[str] = None, num_groups: int = None) -> str:
     """Generate mailto link for Book Now button"""
     tracking_email = f"{TRACKING_EMAIL_PREFIX}@bookings.teemail.io"
-    subject = quote(f"BOOKING REQUEST - {date} at {time}")
-    
+
+    # Handle grouped times
+    if grouped_times and len(grouped_times) > 1:
+        time_display = " & ".join(grouped_times)
+        subject = quote(f"GROUP BOOKING REQUEST - {date} at {time_display}")
+        tee_times_text = f"I would like to book the following tee times as a group:"
+        time_detail = f"- Tee Times: {time_display} ({num_groups} groups)"
+    else:
+        subject = quote(f"BOOKING REQUEST - {date} at {time}")
+        tee_times_text = f"I would like to book the following tee time:"
+        time_detail = f"- Time: {time}"
+
     body_lines = [
-        f"I would like to book the following tee time:",
+        tee_times_text,
         f"",
         f"Booking Details:",
         f"- Date: {date}",
-        f"- Time: {time}",
+        time_detail,
         f"- Players: {players}",
         f"- Green Fee: {CURRENCY_SYMBOL}{PER_PLAYER_FEE:.0f} per player",
         f"- Total: {CURRENCY_SYMBOL}{players * PER_PLAYER_FEE:.0f}",
         f"",
         f"Guest Email: {guest_email}",
     ]
-    
+
     if booking_id:
         body_lines.insert(3, f"- Booking ID: {booking_id}")
-    
+
     body = quote("\n".join(body_lines))
     return f"mailto:{tracking_email}?subject={subject}&body={body}"
 
@@ -695,13 +840,31 @@ def format_inquiry_email(results: list, player_count: int, guest_email: str, boo
         for result in date_results:
             time = result["time"]
             green_fee = result.get("green_fee", PER_PLAYER_FEE)
-            booking_link = build_booking_link(date, time, player_count, guest_email, booking_id)
-            
+
+            # Handle grouped tee times for larger parties
+            is_grouped = result.get("is_grouped", False)
+            grouped_times = result.get("grouped_times", [time])
+            num_groups = result.get("num_groups", 1)
+
+            if is_grouped and len(grouped_times) > 1:
+                # Display grouped times
+                time_display = " & ".join(grouped_times)
+                players_display = f"{player_count} players ({num_groups} groups)"
+                total_fee = player_count * PER_PLAYER_FEE
+                booking_link = build_booking_link(date, time, player_count, guest_email, booking_id,
+                                                  grouped_times=grouped_times, num_groups=num_groups)
+            else:
+                # Display single time
+                time_display = time
+                players_display = f"{player_count} players"
+                total_fee = player_count * PER_PLAYER_FEE
+                booking_link = build_booking_link(date, time, player_count, guest_email, booking_id)
+
             html += f"""
                 <tr>
-                    <td><strong style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']};">{time}</strong></td>
-                    <td>{player_count} players</td>
-                    <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{green_fee:.2f}</td>
+                    <td><strong style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']};">{time_display}</strong></td>
+                    <td>{players_display}</td>
+                    <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{total_fee:.2f}</td>
                     <td style="text-align: center;">
                         <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
                     </td>
@@ -838,36 +1001,93 @@ def format_confirmation_email(booking_data: Dict) -> str:
     return html
 
 
-def format_no_availability_email(player_count: int, dates: list = None) -> str:
-    """Generate email when no availability found"""
+def format_no_availability_email(player_count: int, dates: list = None, alternative_results: list = None, guest_email: str = None, booking_id: str = None) -> str:
+    """Generate email when no availability found, with alternative dates if available"""
     html = get_email_header()
-    
+
     html += f"""
         <p style="color: {ROYAL_PORTRUSH_COLORS['text_dark']}; font-size: 16px; line-height: 1.8;">
             Thank you for your enquiry at <strong>Royal Portrush Golf Club</strong>.
         </p>
-        
+
         <div style="background: #fef2f2; border-left: 4px solid #dc2626; border-radius: 8px; padding: 20px; margin: 25px 0;">
             <h3 style="color: #dc2626; margin: 0 0 12px 0;">⚠️ No Availability Found</h3>
             <p style="margin: 0;">Unfortunately, we do not have availability for <strong>{player_count} player(s)</strong> on your requested dates.</p>
         </div>
-        
+    """
+
+    # If alternative dates found, show them
+    if alternative_results and len(alternative_results) > 0:
+        html += f"""
+        <div style="background: {ROYAL_PORTRUSH_COLORS['success_bg']}; border-left: 4px solid {ROYAL_PORTRUSH_COLORS['success_green']}; border-radius: 8px; padding: 20px; margin: 25px 0;">
+            <h3 style="color: {ROYAL_PORTRUSH_COLORS['success_green']}; margin: 0 0 15px 0;">✨ Alternative Dates Available</h3>
+            <p style="margin: 0 0 15px 0;">We found availability on nearby dates (within 2 days):</p>
+        </div>
+        """
+
+        # Group alternatives by date
+        alt_dates_list = sorted(list(set([r["date"] for r in alternative_results])))
+
+        for date in alt_dates_list:
+            date_results = [r for r in alternative_results if r["date"] == date]
+            if not date_results:
+                continue
+
+            formatted_date = format_date_display(date)
+
+            html += f"""
+            <div style="margin: 30px 0;">
+                <h2 style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-size: 18px; margin: 0 0 15px 0;">
+                    📅 {formatted_date}
+                </h2>
+                <table class="tee-table">
+                    <thead>
+                        <tr>
+                            <th>Tee Time</th>
+                            <th>Players</th>
+                            <th>Green Fee</th>
+                            <th style="text-align: center;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            """
+
+            for result in date_results[:8]:  # Limit to 8 times per date
+                time = result["time"]
+                green_fee = result.get("green_fee", PER_PLAYER_FEE)
+                booking_link = build_booking_link(date, time, player_count, guest_email, booking_id) if guest_email else "#"
+
+                html += f"""
+                    <tr>
+                        <td><strong style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']};">{time}</strong></td>
+                        <td>{player_count} players</td>
+                        <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{green_fee:.2f}</td>
+                        <td style="text-align: center;">
+                            <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                        </td>
+                    </tr>
+                """
+
+            html += "</tbody></table></div>"
+
+    # Always show suggestions and contact info
+    html += f"""
         <div class="info-box">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">💡 Suggestions</h3>
             <ul style="margin: 10px 0; padding-left: 20px; font-size: 14px; line-height: 1.8;">
-                <li>Try different dates (note: no visitor bookings on Wednesdays or weekends)</li>
+                <li>Try different dates (note: no visitor bookings on Wednesdays)</li>
                 <li>Consider a smaller group size</li>
-                <li>Contact us directly for alternative options</li>
+                <li>Contact us directly for more options</li>
             </ul>
         </div>
-        
+
         <div class="info-box">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">📞 Contact Us</h3>
             <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['burgundy']};">{CLUB_BOOKING_EMAIL}</a></p>
             <p style="margin: 5px 0;"><strong>Phone:</strong> +44 28 7082 2311</p>
         </div>
     """
-    
+
     html += get_email_footer()
     return html
 
@@ -1130,12 +1350,24 @@ def handle_inbound_email():
                     html_email = format_inquiry_email(results, parsed['players'], sender_email, booking_id)
                     subject_line = "Available Tee Times at Royal Portrush Golf Club"
                 else:
-                    logging.info(f"📧 SENDING EMAIL - No Availability to {sender_email}")
-                    logging.info(f"   Requested: {', '.join(parsed['dates'])}")
-                    logging.info(f"   Players: {parsed['players']}")
+                    # No availability on requested dates - search for alternatives
+                    alternative_results = find_alternative_dates(parsed['dates'], parsed['players'], DEFAULT_COURSE_ID, days_range=2)
 
-                    html_email = format_no_availability_email(parsed['players'], parsed['dates'])
-                    subject_line = "Tee Time Availability - Royal Portrush Golf Club"
+                    if alternative_results:
+                        logging.info(f"📧 SENDING EMAIL - No Availability on Requested Dates, but {len(alternative_results)} Alternative(s) Found")
+                        logging.info(f"   Requested: {', '.join(parsed['dates'])}")
+                        logging.info(f"   Players: {parsed['players']}")
+                        logging.info(f"   Alternatives: {len(set([r['date'] for r in alternative_results]))} nearby date(s)")
+
+                        html_email = format_no_availability_email(parsed['players'], parsed['dates'], alternative_results, sender_email, booking_id)
+                        subject_line = "Alternative Tee Times Available - Royal Portrush Golf Club"
+                    else:
+                        logging.info(f"📧 SENDING EMAIL - No Availability (including alternatives) to {sender_email}")
+                        logging.info(f"   Requested: {', '.join(parsed['dates'])}")
+                        logging.info(f"   Players: {parsed['players']}")
+
+                        html_email = format_no_availability_email(parsed['players'], parsed['dates'])
+                        subject_line = "Tee Time Availability - Royal Portrush Golf Club"
             else:
                 logging.info(f"📧 SENDING EMAIL - No Dates Provided to {sender_email}")
                 html_email = format_no_availability_email(parsed['players'])
