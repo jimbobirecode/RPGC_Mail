@@ -349,7 +349,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 SELECT
                     id,
                     date,
-                    time,
+                    tee_time,
                     max_players,
                     available_slots,
                     is_available,
@@ -360,7 +360,7 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 AND date = %s
                 AND is_available = TRUE
                 AND available_slots > 0
-                ORDER BY time ASC
+                ORDER BY tee_time ASC
             """, (club, date_str))
 
             date_results = cursor.fetchall()
@@ -370,10 +370,16 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
 
             if slots_found > 0:
                 for slot in date_results:
-                    # Normalize time format
-                    time_str = str(slot['time'])
-                    if len(time_str) == 8:  # HH:MM:SS format
-                        time_str = time_str[:5]  # Convert to HH:MM
+                    # Convert TIME type to string (HH:MM format)
+                    tee_time = slot['tee_time']
+                    if hasattr(tee_time, 'strftime'):
+                        # It's a datetime.time object
+                        time_str = tee_time.strftime('%H:%M')
+                    else:
+                        # It's already a string
+                        time_str = str(tee_time)
+                        if len(time_str) == 8:  # HH:MM:SS format
+                            time_str = time_str[:5]  # Convert to HH:MM
 
                     # Use actual available_slots from inventory
                     available_slots = slot['available_slots']
