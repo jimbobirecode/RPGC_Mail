@@ -271,6 +271,8 @@ def find_grouped_tee_times(all_slots: List[Dict], players: int, max_gap_minutes:
             if total_capacity >= players:
                 times = [s['time'] for s in combination]
                 num_groups = len(combination)
+                # Use green_fee from first slot (or default if not available)
+                green_fee = combination[0].get('green_fee', PER_PLAYER_FEE)
 
                 logging.info(f"   ✓ Found combination: {' & '.join(times)} = {total_capacity} slots ({num_groups} groups)")
 
@@ -279,7 +281,7 @@ def find_grouped_tee_times(all_slots: List[Dict], players: int, max_gap_minutes:
                     'time': times[0],  # Primary time
                     'grouped_times': times,  # All times in the group
                     'available_slots': total_capacity,
-                    'green_fee': PER_PLAYER_FEE,
+                    'green_fee': green_fee,
                     'num_groups': num_groups,
                     'is_grouped': True
                 })
@@ -292,8 +294,8 @@ def find_grouped_tee_times(all_slots: List[Dict], players: int, max_gap_minutes:
 
 def check_availability_db(dates: List[str], players: int, club: str = None) -> List[Dict]:
     """
-    Check tee time availability from the database
-    Returns list of available slots based on recurring weekly template
+    Check tee time availability from the database (date-based inventory)
+    Returns list of available slots for specific dates
     For groups > 4, automatically finds grouped consecutive tee times
     """
     if club is None:
@@ -313,11 +315,10 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
         cursor = conn.cursor(cursor_factory=RealDictCursor)
 
         for date_str in dates:
-            # Parse date and get day of week
+            # Parse and validate date
             try:
                 date_obj = datetime.strptime(date_str, '%Y-%m-%d')
                 day_name = date_obj.strftime('%A')  # e.g., 'Monday'
-                day_name_upper = day_name.upper()    # e.g., 'MONDAY'
 
                 logging.info(f"📅 CHECKING - {date_str} ({day_name})")
 
@@ -328,8 +329,8 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
             # Check if date is blocked
             cursor.execute("""
                 SELECT reason FROM blocked_dates
-                WHERE date = %s
-            """, (date_str,))
+                WHERE club = %s AND date = %s
+            """, (club, date_str))
 
             blocked = cursor.fetchone()
             if blocked:
@@ -341,43 +342,51 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
                 logging.info(f"🚫 DATE EXCLUDED - {date_str} ({day_name}): No visitor bookings on Wednesdays")
                 continue
 
-            # Query available tee times - get ALL available times (not filtered by players for grouping)
-            logging.info(f"🔎 QUERYING - tee_times for day_of_week = '{day_name_upper}'")
+            # Query available tee times for specific date (date-based inventory)
+            logging.info(f"🔎 QUERYING - tee_times for date = '{date_str}'")
 
             cursor.execute("""
                 SELECT
                     id,
-                    day_of_week,
-                    tee_time,
-                    period,
+                    date,
+                    time,
                     max_players,
+                    available_slots,
                     is_available,
+                    green_fee,
                     notes
                 FROM tee_times
-                WHERE day_of_week = %s
+                WHERE club = %s
+                AND date = %s
                 AND is_available = TRUE
-                ORDER BY tee_time ASC
-            """, (day_name_upper,))
+                AND available_slots > 0
+                ORDER BY time ASC
+            """, (club, date_str))
 
             date_results = cursor.fetchall()
             slots_found = len(date_results)
 
-            logging.info(f"📊 QUERY RESULT - Found {slots_found} tee time template(s) for {day_name_upper}")
+            logging.info(f"📊 QUERY RESULT - Found {slots_found} available tee time(s) for {date_str}")
 
             if slots_found > 0:
                 for slot in date_results:
-                    # Convert time object to string
-                    time_str = str(slot['tee_time'])
+                    # Normalize time format
+                    time_str = str(slot['time'])
                     if len(time_str) == 8:  # HH:MM:SS format
                         time_str = time_str[:5]  # Convert to HH:MM
 
-                    available_slots = slot['max_players']
+                    # Use actual available_slots from inventory
+                    available_slots = slot['available_slots']
+                    green_fee = float(slot['green_fee']) if slot['green_fee'] else PER_PLAYER_FEE
+
+                    logging.info(f"   • {time_str} - {available_slots}/{slot['max_players']} slots available - £{green_fee:.2f} per player")
 
                     all_slots.append({
                         'date': date_str,
                         'time': time_str,
                         'available_slots': available_slots,
-                        'green_fee': PER_PLAYER_FEE,
+                        'max_players': slot['max_players'],
+                        'green_fee': green_fee,
                         'is_grouped': False
                     })
 
@@ -392,8 +401,6 @@ def check_availability_db(dates: List[str], players: int, club: str = None) -> L
 
             if results:
                 logging.info(f"✅ AVAILABILITY - {len(results)} tee time(s) found for {players} player(s)")
-                for result in results[:5]:  # Log first 5
-                    logging.info(f"   • {result['time']} - {result['available_slots']} slots - £{PER_PLAYER_FEE:.2f} per player")
 
         logging.info(f"📋 TOTAL RESULTS - {len(results)} available tee time(s) across all dates")
         return results
@@ -1377,11 +1384,20 @@ def handle_inbound_email():
                 results = check_availability_db(parsed['dates'], parsed['players'], DEFAULT_COURSE_ID)
 
                 if results:
+                    # Update booking with first available time
+                    first_result = results[0]
+                    update_booking_in_db(booking_id, {
+                        'date': first_result['date'],
+                        'tee_time': first_result['time'],
+                        'note': f"Initial inquiry - {len(results)} tee time(s) available"
+                    })
+
                     logging.info(f"📧 SENDING EMAIL - Available Tee Times ({len(results)} options) to {sender_email}")
                     logging.info(f"   Booking ID: {booking_id}")
                     logging.info(f"   Players: {parsed['players']}")
-                    logging.info(f"   Green Fee: £{PER_PLAYER_FEE:.2f} per player")
-                    logging.info(f"   Total: £{parsed['players'] * PER_PLAYER_FEE:.2f}")
+                    logging.info(f"   Suggested Time: {first_result['date']} at {first_result['time']}")
+                    logging.info(f"   Green Fee: £{first_result.get('green_fee', PER_PLAYER_FEE):.2f} per player")
+                    logging.info(f"   Total: £{parsed['players'] * first_result.get('green_fee', PER_PLAYER_FEE):.2f}")
 
                     html_email = format_inquiry_email(results, parsed['players'], sender_email, booking_id)
                     subject_line = "Available Tee Times at Royal Portrush Golf Club"
@@ -1390,10 +1406,19 @@ def handle_inbound_email():
                     alternative_results = find_alternative_dates(parsed['dates'], parsed['players'], DEFAULT_COURSE_ID, days_range=2)
 
                     if alternative_results:
+                        # Update booking with first alternative time
+                        first_alt = alternative_results[0]
+                        update_booking_in_db(booking_id, {
+                            'date': first_alt['date'],
+                            'tee_time': first_alt['time'],
+                            'note': f"Initial inquiry - no availability on requested dates, {len(alternative_results)} alternative(s) suggested"
+                        })
+
                         logging.info(f"📧 SENDING EMAIL - No Availability on Requested Dates, but {len(alternative_results)} Alternative(s) Found")
                         logging.info(f"   Requested: {', '.join(parsed['dates'])}")
                         logging.info(f"   Players: {parsed['players']}")
                         logging.info(f"   Alternatives: {len(set([r['date'] for r in alternative_results]))} nearby date(s)")
+                        logging.info(f"   Suggested Time: {first_alt['date']} at {first_alt['time']}")
 
                         html_email = format_no_availability_email(parsed['players'], parsed['dates'], alternative_results, sender_email, booking_id)
                         subject_line = "Alternative Tee Times Available - Royal Portrush Golf Club"
