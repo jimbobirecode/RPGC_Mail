@@ -625,6 +625,30 @@ def extract_booking_id(text: str) -> Optional[str]:
     return match.group(0).upper() if match else None
 
 
+def strip_html_tags(html_content: str) -> str:
+    """Remove HTML tags and decode entities from HTML content"""
+    if not html_content:
+        return ""
+
+    # Remove HTML tags
+    text = re.sub(r'<[^>]+>', ' ', html_content)
+
+    # Common HTML entities
+    text = text.replace('&nbsp;', ' ')
+    text = text.replace('&amp;', '&')
+    text = text.replace('&lt;', '<')
+    text = text.replace('&gt;', '>')
+    text = text.replace('&quot;', '"')
+    text = text.replace('&#39;', "'")
+    text = text.replace('&apos;', "'")
+
+    # Clean up excessive whitespace
+    text = re.sub(r'\s+', ' ', text)
+    text = text.strip()
+
+    return text
+
+
 def extract_message_id(headers: str) -> Optional[str]:
     if not headers:
         return None
@@ -1219,13 +1243,25 @@ def handle_inbound_email():
         text_body = request.form.get('text', '')
         html_body = request.form.get('html', '')
         headers = request.form.get('headers', '')
-        
-        body = text_body if text_body else html_body
+
+        # Properly handle text vs HTML body - prefer text, strip HTML if using HTML
+        if text_body and text_body.strip():
+            body = text_body.strip()
+            body_type = "text"
+        elif html_body and html_body.strip():
+            body = strip_html_tags(html_body)
+            body_type = "html (stripped)"
+        else:
+            body = ""
+            body_type = "empty"
+
         message_id = extract_message_id(headers)
-        
+
         logging.info("="*60)
         logging.info(f"INBOUND EMAIL - From: {from_email}")
         logging.info(f"Subject: {subject}")
+        logging.info(f"Body type: {body_type}")
+        logging.info(f"Body preview: {body[:200]}..." if len(body) > 200 else f"Body: {body}")
         logging.info("="*60)
         
         # Extract sender email
