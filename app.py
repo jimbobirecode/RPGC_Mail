@@ -675,22 +675,33 @@ def extract_message_id(headers: str) -> Optional[str]:
 # ============================================================================
 
 def get_email_header():
-    """Royal Portrush Golf Club branded email header - Outlook compatible"""
+    """Royal Portrush Golf Club branded email header - Outlook compatible with gradients"""
     return f"""
     <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-    <html xmlns="http://www.w3.org/1999/xhtml">
+    <html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
     <head>
         <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <meta name="x-apple-disable-message-reformatting" />
         <title>Royal Portrush Golf Club - Booking</title>
-        <!--[if mso]>
-        <style type="text/css">
-            body, table, td {{font-family: Arial, Helvetica, sans-serif !important;}}
-        </style>
+        <!--[if gte mso 9]>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:AllowPNG/>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
         <![endif]-->
+        <style type="text/css">
+            body {{
+                margin: 0; padding: 0; width: 100%;
+                font-family: Georgia, 'Times New Roman', serif;
+                -webkit-text-size-adjust: 100%;
+                -ms-text-size-adjust: 100%;
+            }}
+        </style>
     </head>
-    <body style="margin: 0; padding: 0; width: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; font-family: Georgia, 'Times New Roman', serif;">
+    <body style="margin: 0; padding: 0; width: 100%; font-family: Georgia, 'Times New Roman', serif; background-color: {ROYAL_PORTRUSH_COLORS['light_grey']};">
         <!-- Outer table for background color -->
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0; padding: 0; background-color: {ROYAL_PORTRUSH_COLORS['light_grey']};">
             <tr>
@@ -698,23 +709,22 @@ def get_email_header():
                     <!-- Main email container -->
                     <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; margin: 0 auto;">
 
-                        <!-- Header with solid background (Outlook-compatible) -->
+                        <!-- Header with gradient background (VML for Outlook, CSS for others) -->
                         <tr>
-                            <td align="center" style="background-color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; padding: 40px 30px;">
-                                <!--[if mso]>
-                                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                <td align="center">
+                            <td align="center" style="padding: 0;">
+                                <!--[if gte mso 9]>
+                                <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:200px;">
+                                <v:fill type="gradient" color="{ROYAL_PORTRUSH_COLORS['navy_primary']}" color2="{ROYAL_PORTRUSH_COLORS['burgundy']}" angle="135" />
+                                <v:textbox inset="0,0,0,0">
                                 <![endif]-->
-
-                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/LOGO.png" alt="Royal Portrush Golf Club" width="120" style="display: block; margin: 0 auto 20px auto; max-width: 120px; height: auto;" />
-                                <h1 style="color: #ffffff; font-size: 28px; margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-weight: normal;">Royal Portrush Golf Club</h1>
-                                <p style="color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 16px; margin: 0; font-family: Georgia, 'Times New Roman', serif;">Available Tee Times for Your Round</p>
-
-                                <!--[if mso]>
-                                </td>
-                                </tr>
-                                </table>
+                                <div style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['navy_primary']} 0%, {ROYAL_PORTRUSH_COLORS['burgundy']} 100%); padding: 40px 30px; text-align: center;">
+                                    <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/LOGO.png" alt="Royal Portrush Golf Club" width="120" style="display: block; margin: 0 auto 20px auto; max-width: 120px; height: auto;" />
+                                    <h1 style="color: #ffffff; font-size: 28px; margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-weight: normal;">Royal Portrush Golf Club</h1>
+                                    <p style="color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 16px; margin: 0; font-family: Georgia, 'Times New Roman', serif;">Available Tee Times for Your Round</p>
+                                </div>
+                                <!--[if gte mso 9]>
+                                </v:textbox>
+                                </v:rect>
                                 <![endif]-->
                             </td>
                         </tr>
@@ -726,36 +736,35 @@ def get_email_header():
 
 
 def get_email_footer():
-    """Royal Portrush Golf Club branded email footer - Outlook compatible"""
+    """Royal Portrush Golf Club branded email footer - Outlook compatible with gradients"""
     return f"""
                             </td>
                         </tr>
 
-                        <!-- Footer with solid background (Outlook-compatible) -->
+                        <!-- Footer with gradient background (VML for Outlook, CSS for others) -->
                         <tr>
-                            <td align="center" style="background-color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; padding: 30px; color: #ffffff;">
-                                <!--[if mso]>
-                                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
-                                <tr>
-                                <td align="center" style="padding: 30px;">
+                            <td align="center" style="padding: 0;">
+                                <!--[if gte mso 9]>
+                                <v:rect xmlns:v="urn:schemas-microsoft-com:vml" fill="true" stroke="false" style="width:600px;height:150px;">
+                                <v:fill type="gradient" color="{ROYAL_PORTRUSH_COLORS['navy_primary']}" color2="{ROYAL_PORTRUSH_COLORS['burgundy']}" angle="135" />
+                                <v:textbox inset="0,0,0,0">
                                 <![endif]-->
-
-                                <p style="margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px; color: #ffffff;">We look forward to welcoming you to Royal Portrush Golf Club!</p>
-                                <p style="margin: 0 0 15px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px;">
-                                    <strong style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']};">Royal Portrush Golf Club</strong>
-                                </p>
-                                <p style="margin: 0; font-size: 13px; font-family: Georgia, 'Times New Roman', serif; color: #ffffff;">
-                                    Questions? Email us at
-                                    <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']}; text-decoration: underline;">{CLUB_BOOKING_EMAIL}</a>
-                                </p>
-                                <p style="margin: 15px 0 0 0; color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 11px; font-family: Georgia, 'Times New Roman', serif;">
-                                    Powered by TeeMail &middot; Automated Visitor Booking
-                                </p>
-
-                                <!--[if mso]>
-                                </td>
-                                </tr>
-                                </table>
+                                <div style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['navy_primary']} 0%, {ROYAL_PORTRUSH_COLORS['burgundy']} 100%); padding: 30px; text-align: center; color: #ffffff;">
+                                    <p style="margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px; color: #ffffff;">We look forward to welcoming you to Royal Portrush Golf Club!</p>
+                                    <p style="margin: 0 0 15px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px;">
+                                        <strong style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']};">Royal Portrush Golf Club</strong>
+                                    </p>
+                                    <p style="margin: 0; font-size: 13px; font-family: Georgia, 'Times New Roman', serif; color: #ffffff;">
+                                        Questions? Email us at
+                                        <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']}; text-decoration: underline;">{CLUB_BOOKING_EMAIL}</a>
+                                    </p>
+                                    <p style="margin: 15px 0 0 0; color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 11px; font-family: Georgia, 'Times New Roman', serif;">
+                                        Powered by TeeMail &middot; Automated Visitor Booking
+                                    </p>
+                                </div>
+                                <!--[if gte mso 9]>
+                                </v:textbox>
+                                </v:rect>
                                 <![endif]-->
                             </td>
                         </tr>
@@ -929,7 +938,7 @@ def format_inquiry_email(results: list, player_count: int, guest_email: str, boo
                     <td>{players_display}</td>
                     <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{total_fee:.2f}</td>
                     <td style="text-align: center;">
-                        <a href="{booking_link}" style="background-color: #6c1535; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                        <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block;">Book Now</a>
                     </td>
                 </tr>
             """
@@ -1010,7 +1019,7 @@ def format_confirmation_email(booking_data: Dict) -> str:
     html = get_email_header()
     
     html += f"""
-        <div style="background-color: #6c1535; color: #ffffff; padding: 25px; border-radius: 8px; text-align: center; margin-bottom: 30px;">
+        <div style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['success_green']} 0%, #1f4d31 100%); color: #ffffff; padding: 25px; border-radius: 8px; text-align: center; margin-bottom: 30px;">
             <h2 style="margin: 0; font-size: 28px;">✅ Booking Confirmed</h2>
         </div>
         
@@ -1126,7 +1135,7 @@ def format_no_availability_email(player_count: int, dates: list = None, alternat
                         <td>{player_count} players</td>
                         <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{green_fee:.2f}</td>
                         <td style="text-align: center;">
-                            <a href="{booking_link}" style="background-color: #6c1535; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                            <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px; display: inline-block;">Book Now</a>
                         </td>
                     </tr>
                 """
