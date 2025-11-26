@@ -675,113 +675,97 @@ def extract_message_id(headers: str) -> Optional[str]:
 # ============================================================================
 
 def get_email_header():
-    """Royal Portrush Golf Club branded email header"""
+    """Royal Portrush Golf Club branded email header - Outlook compatible"""
     return f"""
-    <!DOCTYPE html>
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
     <html xmlns="http://www.w3.org/1999/xhtml">
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <meta name="x-apple-disable-message-reformatting" />
         <title>Royal Portrush Golf Club - Booking</title>
+        <!--[if mso]>
         <style type="text/css">
-            body {{
-                margin: 0; padding: 0; width: 100%;
-                font-family: Georgia, 'Times New Roman', serif;
-                background-color: {ROYAL_PORTRUSH_COLORS['light_grey']};
-            }}
-            .email-container {{
-                background: #ffffff;
-                border-radius: 12px;
-                max-width: 800px;
-                margin: 20px auto;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }}
-            .header {{
-                background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['navy_primary']} 0%, {ROYAL_PORTRUSH_COLORS['burgundy']} 100%);
-                padding: 40px 30px;
-                text-align: center;
-                border-radius: 12px 12px 0 0;
-            }}
-            .header h1 {{ color: #ffffff; font-size: 28px; margin: 0 0 10px 0; }}
-            .header p {{ color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 16px; margin: 0; }}
-            .content {{ padding: 40px 30px; }}
-            .info-box {{
-                background: {ROYAL_PORTRUSH_COLORS['info_bg']};
-                border-left: 4px solid {ROYAL_PORTRUSH_COLORS['navy_primary']};
-                border-radius: 8px;
-                padding: 20px;
-                margin: 20px 0;
-            }}
-            .tee-table {{
-                width: 100%;
-                border-collapse: collapse;
-                margin: 25px 0;
-                border: 1px solid {ROYAL_PORTRUSH_COLORS['border_grey']};
-            }}
-            .tee-table thead {{
-                background: {ROYAL_PORTRUSH_COLORS['navy_primary']};
-                color: #ffffff;
-            }}
-            .tee-table th {{
-                padding: 15px 12px;
-                text-align: left;
-                font-size: 12px;
-                text-transform: uppercase;
-            }}
-            .tee-table td {{
-                padding: 15px 12px;
-                border-bottom: 1px solid {ROYAL_PORTRUSH_COLORS['border_grey']};
-            }}
-            .footer {{
-                background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['navy_primary']} 0%, {ROYAL_PORTRUSH_COLORS['burgundy']} 100%);
-                padding: 30px;
-                text-align: center;
-                color: #ffffff;
-                border-radius: 0 0 12px 12px;
-            }}
+            body, table, td {{font-family: Arial, Helvetica, sans-serif !important;}}
         </style>
+        <![endif]-->
     </head>
-    <body>
-        <table role="presentation" width="100%" style="background-color: {ROYAL_PORTRUSH_COLORS['light_grey']};">
+    <body style="margin: 0; padding: 0; width: 100%; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; font-family: Georgia, 'Times New Roman', serif;">
+        <!-- Outer table for background color -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 0; padding: 0; background-color: {ROYAL_PORTRUSH_COLORS['light_grey']};">
             <tr>
-                <td style="padding: 20px;">
-                    <table class="email-container" align="center" width="800">
+                <td align="center" style="padding: 20px 0;">
+                    <!-- Main email container -->
+                    <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #ffffff; margin: 0 auto;">
+
+                        <!-- Header with solid background (Outlook-compatible) -->
                         <tr>
-                            <td class="header">
-                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/LOGO.png" alt="Royal Portrush Golf Club" style="max-width: 120px; margin-bottom: 20px;" />
-                                <h1>Royal Portrush Golf Club</h1>
-                                <p>Available Tee Times for Your Round</p>
+                            <td align="center" style="background-color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; padding: 40px 30px;">
+                                <!--[if mso]>
+                                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                <td align="center">
+                                <![endif]-->
+
+                                <img src="https://raw.githubusercontent.com/jimbobirecode/TeeMail-Assests/main/LOGO.png" alt="Royal Portrush Golf Club" width="120" style="display: block; margin: 0 auto 20px auto; max-width: 120px; height: auto;" />
+                                <h1 style="color: #ffffff; font-size: 28px; margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-weight: normal;">Royal Portrush Golf Club</h1>
+                                <p style="color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 16px; margin: 0; font-family: Georgia, 'Times New Roman', serif;">Available Tee Times for Your Round</p>
+
+                                <!--[if mso]>
+                                </td>
+                                </tr>
+                                </table>
+                                <![endif]-->
                             </td>
                         </tr>
+
+                        <!-- Content area -->
                         <tr>
-                            <td class="content">
+                            <td style="padding: 40px 30px;">
     """
 
 
 def get_email_footer():
-    """Royal Portrush Golf Club branded email footer"""
+    """Royal Portrush Golf Club branded email footer - Outlook compatible"""
     return f"""
                             </td>
                         </tr>
+
+                        <!-- Footer with solid background (Outlook-compatible) -->
                         <tr>
-                            <td class="footer">
-                                <p style="margin: 0 0 10px 0;">We look forward to welcoming you to Royal Portrush Golf Club!</p>
-                                <p style="margin: 0 0 15px 0;">
+                            <td align="center" style="background-color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; padding: 30px; color: #ffffff;">
+                                <!--[if mso]>
+                                <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                <td align="center" style="padding: 30px;">
+                                <![endif]-->
+
+                                <p style="margin: 0 0 10px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px; color: #ffffff;">We look forward to welcoming you to Royal Portrush Golf Club!</p>
+                                <p style="margin: 0 0 15px 0; font-family: Georgia, 'Times New Roman', serif; font-size: 14px;">
                                     <strong style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']};">Royal Portrush Golf Club</strong>
                                 </p>
-                                <p style="margin: 0; font-size: 13px;">
-                                    Questions? Email us at 
-                                    <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']};">{CLUB_BOOKING_EMAIL}</a>
+                                <p style="margin: 0; font-size: 13px; font-family: Georgia, 'Times New Roman', serif; color: #ffffff;">
+                                    Questions? Email us at
+                                    <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['championship_gold']}; text-decoration: underline;">{CLUB_BOOKING_EMAIL}</a>
                                 </p>
-                                <p style="margin-top: 15px; color: {ROYAL_PORTRUSH_COLORS['text_light']}; font-size: 11px;">
-                                    Powered by TeeMail · Automated Visitor Booking
+                                <p style="margin: 15px 0 0 0; color: {ROYAL_PORTRUSH_COLORS['off_white']}; font-size: 11px; font-family: Georgia, 'Times New Roman', serif;">
+                                    Powered by TeeMail &middot; Automated Visitor Booking
                                 </p>
+
+                                <!--[if mso]>
+                                </td>
+                                </tr>
+                                </table>
+                                <![endif]-->
                             </td>
                         </tr>
+
                     </table>
+                    <!-- End main email container -->
                 </td>
             </tr>
         </table>
+        <!-- End outer table -->
     </body>
     </html>
     """
@@ -831,6 +815,48 @@ def format_date_display(date_str: str) -> str:
         return date_str
 
 
+def outlook_button(text: str, link: str, bg_color: str = None) -> str:
+    """Generate Outlook-compatible button using tables"""
+    if bg_color is None:
+        bg_color = ROYAL_PORTRUSH_COLORS['burgundy']
+
+    return f"""
+    <!--[if mso]>
+    <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" href="{link}" style="height:40px;v-text-anchor:middle;width:150px;" arcsize="10%" stroke="f" fillcolor="{bg_color}">
+    <w:anchorlock/>
+    <center style="color:#ffffff;font-family:Arial,sans-serif;font-size:13px;font-weight:bold;">{text}</center>
+    </v:roundrect>
+    <![endif]-->
+    <![if !mso]>
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="display:inline-block;">
+        <tr>
+            <td style="background-color: {bg_color}; padding: 12px 24px; text-align: center;">
+                <a href="{link}" style="color: #ffffff; text-decoration: none; font-weight: 600; font-size: 13px; font-family: Arial, sans-serif; display: inline-block;">{text}</a>
+            </td>
+        </tr>
+    </table>
+    <![endif]>
+    """
+
+
+def outlook_info_box(content: str, border_color: str = None, bg_color: str = None) -> str:
+    """Generate Outlook-compatible info box using tables"""
+    if border_color is None:
+        border_color = ROYAL_PORTRUSH_COLORS['navy_primary']
+    if bg_color is None:
+        bg_color = ROYAL_PORTRUSH_COLORS['info_bg']
+
+    return f"""
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;">
+        <tr>
+            <td style="background-color: {bg_color}; border-left: 4px solid {border_color}; padding: 20px;">
+                {content}
+            </td>
+        </tr>
+    </table>
+    """
+
+
 def format_inquiry_email(results: list, player_count: int, guest_email: str, booking_id: str = None) -> str:
     """Generate inquiry email with available tee times"""
     html = get_email_header()
@@ -843,7 +869,7 @@ def format_inquiry_email(results: list, player_count: int, guest_email: str, boo
             Thank you for your enquiry! We're delighted to share available tee times for your round at Royal Portrush.
         </p>
         
-        <div class="info-box">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="background-color: #e8edf5; border-left: 4px solid #081c3c; padding: 20px;">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 15px 0;">ℹ️ Booking Information</h3>
             <p style="margin: 5px 0;"><strong>Party Size:</strong> {player_count} player(s)</p>
             <p style="margin: 5px 0;"><strong>Status:</strong> <span style="color: {ROYAL_PORTRUSH_COLORS['success_green']};">✓ Tee Times Available</span></p>
@@ -862,7 +888,7 @@ def format_inquiry_email(results: list, player_count: int, guest_email: str, boo
             <h2 style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-size: 18px; margin: 0 0 15px 0;">
                 📅 {formatted_date}
             </h2>
-            <table class="tee-table">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse: collapse; margin: 25px 0; border-color: #e5e7eb;">
                 <thead>
                     <tr>
                         <th>Tee Time</th>
@@ -903,7 +929,7 @@ def format_inquiry_email(results: list, player_count: int, guest_email: str, boo
                     <td>{players_display}</td>
                     <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{total_fee:.2f}</td>
                     <td style="text-align: center;">
-                        <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                        <a href="{booking_link}" style="background-color: #6c1535; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
                     </td>
                 </tr>
             """
@@ -935,7 +961,7 @@ def format_acknowledgment_email(booking_data: Dict) -> str:
             Thank you for your booking request at <strong>Royal Portrush Golf Club</strong>. We have received your request and will review it shortly.
         </p>
         
-        <div class="info-box">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="background-color: #e8edf5; border-left: 4px solid #081c3c; padding: 20px;">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 20px 0;">📋 Your Booking Request</h3>
             <table width="100%" style="border-collapse: collapse;">
                 <tr style="background: {ROYAL_PORTRUSH_COLORS['light_grey']};">
@@ -984,7 +1010,7 @@ def format_confirmation_email(booking_data: Dict) -> str:
     html = get_email_header()
     
     html += f"""
-        <div style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['success_green']} 0%, #1f4d31 100%); color: #ffffff; padding: 25px; border-radius: 8px; text-align: center; margin-bottom: 30px;">
+        <div style="background-color: #6c1535; color: #ffffff; padding: 25px; border-radius: 8px; text-align: center; margin-bottom: 30px;">
             <h2 style="margin: 0; font-size: 28px;">✅ Booking Confirmed</h2>
         </div>
         
@@ -992,7 +1018,7 @@ def format_confirmation_email(booking_data: Dict) -> str:
             Congratulations! Your booking at <strong>Royal Portrush Golf Club</strong> has been confirmed.
         </p>
         
-        <div class="info-box" style="border: 2px solid {ROYAL_PORTRUSH_COLORS['success_green']};">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="background-color: #e8edf5; border-left: 4px solid #081c3c; padding: 20px;">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 20px 0;">📋 Confirmed Booking Details</h3>
             <table width="100%" style="border-collapse: collapse;">
                 <tr style="background: {ROYAL_PORTRUSH_COLORS['light_grey']};">
@@ -1077,7 +1103,7 @@ def format_no_availability_email(player_count: int, dates: list = None, alternat
                 <h2 style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-size: 18px; margin: 0 0 15px 0;">
                     📅 {formatted_date}
                 </h2>
-                <table class="tee-table">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="1" style="border-collapse: collapse; margin: 25px 0; border-color: #e5e7eb;">
                     <thead>
                         <tr>
                             <th>Tee Time</th>
@@ -1100,7 +1126,7 @@ def format_no_availability_email(player_count: int, dates: list = None, alternat
                         <td>{player_count} players</td>
                         <td style="color: {ROYAL_PORTRUSH_COLORS['burgundy']}; font-weight: 700;">{CURRENCY_SYMBOL}{green_fee:.2f}</td>
                         <td style="text-align: center;">
-                            <a href="{booking_link}" style="background: linear-gradient(135deg, {ROYAL_PORTRUSH_COLORS['burgundy']} 0%, {ROYAL_PORTRUSH_COLORS['navy_primary']} 100%); color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
+                            <a href="{booking_link}" style="background-color: #6c1535; color: #ffffff; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 13px;">Book Now</a>
                         </td>
                     </tr>
                 """
@@ -1109,7 +1135,7 @@ def format_no_availability_email(player_count: int, dates: list = None, alternat
 
     # Always show suggestions and contact info
     html += f"""
-        <div class="info-box">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="background-color: #e8edf5; border-left: 4px solid #081c3c; padding: 20px;">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">💡 Suggestions</h3>
             <ul style="margin: 10px 0; padding-left: 20px; font-size: 14px; line-height: 1.8;">
                 <li>Try different dates (note: no visitor bookings on Wednesdays)</li>
@@ -1118,7 +1144,7 @@ def format_no_availability_email(player_count: int, dates: list = None, alternat
             </ul>
         </div>
 
-        <div class="info-box">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin: 20px 0;"><tr><td style="background-color: #e8edf5; border-left: 4px solid #081c3c; padding: 20px;">
             <h3 style="color: {ROYAL_PORTRUSH_COLORS['navy_primary']}; margin: 0 0 12px 0;">📞 Contact Us</h3>
             <p style="margin: 5px 0;"><strong>Email:</strong> <a href="mailto:{CLUB_BOOKING_EMAIL}" style="color: {ROYAL_PORTRUSH_COLORS['burgundy']};">{CLUB_BOOKING_EMAIL}</a></p>
             <p style="margin: 5px 0;"><strong>Phone:</strong> +44 28 7082 2311</p>
