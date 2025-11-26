@@ -1208,55 +1208,121 @@ def is_staff_confirmation(subject: str, body: str, from_email: str) -> bool:
 
 
 def parse_email_simple(subject: str, body: str) -> Dict:
-    """Parse email to extract dates and player count"""
-    full_text = f"{subject}\n{body}".lower()
+    """Parse email to extract dates and player count - Enhanced version"""
+    full_text = f"{subject}\n{body}"
+    full_text_lower = full_text.lower()
     result = {'players': 4, 'dates': []}
 
-    # Extract players
-    player_match = re.search(r'(\d+)\s*(?:players?|people|golfers?)', full_text)
-    if player_match:
-        num = int(player_match.group(1))
-        if 1 <= num <= 20:
-            result['players'] = num
-            logging.info(f"📊 PARSED - Players: {num}")
-        else:
-            logging.info(f"📊 PARSED - Players: {num} (out of range, using default 4)")
-    else:
-        logging.info(f"📊 PARSED - Players: 4 (default, none specified)")
+    logging.info(f"🔍 PARSING EMAIL - Length: {len(full_text)} chars")
+    logging.info(f"   Subject: {subject[:100]}")
+    logging.info(f"   Body preview: {body[:200]}")
 
-    # Extract dates - multiple patterns
+    # ========================================================================
+    # EXTRACT PLAYER COUNT - Multiple patterns
+    # ========================================================================
+    player_patterns = [
+        r'(\d+)\s*(?:players?|people|persons?|golfers?|guests?)',  # "4 players", "2 people"
+        r'(?:party|group)\s+of\s+(\d+)',                            # "party of 4", "group of 6"
+        r'(\d+)[-\s]ball',                                          # "4-ball", "2 ball"
+        r'(?:foursome|four\s*ball)',                                # "foursome" = 4
+        r'(?:twosome|two\s*ball)',                                  # "twosome" = 2
+        r'for\s+(\d+)',                                             # "booking for 4"
+        r'we\s+(?:are|have)\s+(\d+)',                               # "we are 6", "we have 4"
+    ]
+
+    player_found = False
+    for pattern in player_patterns:
+        match = re.search(pattern, full_text_lower)
+        if match:
+            if pattern in [r'(?:foursome|four\s*ball)', r'(?:twosome|two\s*ball)']:
+                # Fixed patterns without capture groups
+                num = 4 if 'four' in pattern else 2
+            else:
+                num = int(match.group(1))
+
+            if 1 <= num <= 20:
+                result['players'] = num
+                player_found = True
+                logging.info(f"📊 PARSED - Players: {num} (pattern: {pattern[:30]}...)")
+                break
+            else:
+                logging.warning(f"⚠️  PARSED - Players: {num} (out of range 1-20, using default 4)")
+
+    if not player_found:
+        logging.info(f"📊 PARSED - Players: 4 (default, no match found)")
+
+    # ========================================================================
+    # EXTRACT DATES - Multiple formats
+    # ========================================================================
     date_patterns = [
-        r'(\d{4}-\d{2}-\d{2})',  # ISO format
-        r'(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2,4})',  # DD/MM/YYYY
-        r'((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?(?:\s+\d{2,4})?)',
+        # ISO format: 2025-12-25
+        (r'(\d{4}-\d{2}-\d{2})', 'iso'),
+
+        # DD/MM/YYYY variants: 25/12/2025, 25-12-2025, 25.12.2025
+        (r'(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{4})', 'dmy_full'),
+
+        # DD/MM/YY variants: 25/12/25
+        (r'(\d{1,2}[/\-.]\d{1,2}[/\-.]\d{2})(?!\d)', 'dmy_short'),
+
+        # Month name formats: December 25 2025, Dec 25, 25 December 2025, 25th Dec 2025
+        (r'(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})', 'dmy_named_year'),
+        (r'((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?\s*,?\s+\d{4})', 'mdy_named_year'),
+        (r'(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)', 'dmy_named'),
+        (r'((?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2}(?:st|nd|rd|th)?)', 'mdy_named'),
     ]
 
     dates_found = []
-    for pattern in date_patterns:
-        for match in re.finditer(pattern, full_text, re.IGNORECASE):
+    for pattern, pattern_name in date_patterns:
+        for match in re.finditer(pattern, full_text_lower, re.IGNORECASE):
             date_str = match.group(1).strip()
-            try:
-                # Try to parse the date
-                if re.match(r'^\d{4}-\d{2}-\d{2}$', date_str):
-                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
-                else:
-                    parsed_date = date_parser.parse(date_str, fuzzy=True, dayfirst=True, default=datetime.now().replace(day=1))
 
-                # Only future dates
-                if parsed_date.date() >= datetime.now().date():
+            try:
+                # Parse based on pattern type
+                if pattern_name == 'iso':
+                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    logging.debug(f"   Parsed ISO date: {date_str} -> {parsed_date.date()}")
+
+                elif pattern_name.startswith('dmy'):
+                    # UK format - day first
+                    parsed_date = date_parser.parse(date_str, fuzzy=True, dayfirst=True, default=datetime.now().replace(day=1))
+                    logging.debug(f"   Parsed DMY date: {date_str} -> {parsed_date.date()}")
+
+                elif pattern_name.startswith('mdy'):
+                    # US format - month first
+                    parsed_date = date_parser.parse(date_str, fuzzy=True, dayfirst=False, default=datetime.now().replace(day=1))
+                    logging.debug(f"   Parsed MDY date: {date_str} -> {parsed_date.date()}")
+
+                else:
+                    # Generic parsing
+                    parsed_date = date_parser.parse(date_str, fuzzy=True, dayfirst=True, default=datetime.now().replace(day=1))
+                    logging.debug(f"   Parsed generic date: {date_str} -> {parsed_date.date()}")
+
+                # Validation: Only future dates within next 2 years
+                today = datetime.now().date()
+                two_years_ahead = today.replace(year=today.year + 2)
+
+                if parsed_date.date() >= today and parsed_date.date() <= two_years_ahead:
                     formatted = parsed_date.strftime('%Y-%m-%d')
                     if formatted not in dates_found:
                         dates_found.append(formatted)
-            except:
+                        logging.debug(f"   ✓ Valid date: {formatted}")
+                    else:
+                        logging.debug(f"   - Duplicate date: {formatted}")
+                else:
+                    logging.debug(f"   ✗ Date out of range: {parsed_date.date()} (must be {today} to {two_years_ahead})")
+
+            except Exception as e:
+                logging.debug(f"   ✗ Failed to parse '{date_str}' with pattern {pattern_name}: {e}")
                 continue
 
-    result['dates'] = dates_found
+    result['dates'] = sorted(dates_found)
 
     if dates_found:
         logging.info(f"📅 PARSED - Dates found: {', '.join(dates_found)}")
     else:
-        logging.info(f"📅 PARSED - No dates found in email")
+        logging.info(f"📅 PARSED - No valid dates found in email")
 
+    logging.info(f"✅ PARSE COMPLETE - Players: {result['players']}, Dates: {len(result['dates'])}")
     return result
 
 
